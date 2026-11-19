@@ -1,0 +1,46 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Copyright (C) 2026 D-Modem Authors
+#
+# The shared code's tests on Linux, then dmodem.sys with clang-retro's
+# toolchain, its imports checked against Windows 2000's kernel and 98 SE's
+# and ME's WDM, and inf/dmodem.inf checked against D-Modem's.
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Tests (port core, engine channel)
+        run: make test
+
+      - uses: clang-retro/dos-sdk/.github/actions/setup-toolchain@main
+        id: clang-dos
+
+      - name: dmodem.sys
+        run: make driver CLANG_DOS="$CLANG_DOS"
+
+      - name: Imports (2000, 98 SE, ME)
+        run: make check CLANG_DOS="$CLANG_DOS"
+
+      - uses: actions/checkout@v4
+        with:
+          repository: d-modem/d-modem
+          path: D-Modem
+          sparse-checkout: platforms/windows/winmodem
+
+      - name: dmodem.inf up to date with D-Modem's
+        run: make inf-check DMODEM=D-Modem
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dmodem-driver
+          path: |
+            build/dmodem.sys
+            build/dmodem.pdb
+            inf/dmodem.inf
