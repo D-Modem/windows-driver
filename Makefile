@@ -74,11 +74,15 @@ ENGINE_FLAGS = --config=$(CLANG_DOS)/bin/win32-picolibc.cfg -D_GNU_SOURCE \
 	-O2 -Wall -Wextra -Werror -Iengine -Icommon -Iinclude \
 	-I$(DMODEM)/frontend/dmodemd
 
-# libdmodem for Windows (clang-retro) and for this machine
+# libdmodem for Windows (clang-retro: D-Modem's toolchain file with the
+# win32-picolibc config, for 95/98/ME/NT 4.0 and later; _GNU_SOURCE for
+# picolibc's CLOCK_MONOTONIC) and for this machine
 $(OUT)/w32/dmodemd/libdmodem.a: FORCE | $(OUT)
+	CFLAGS=-D_GNU_SOURCE CXXFLAGS=-D_GNU_SOURCE \
 	$(CMAKE) -S $(DMODEM) -B $(OUT)/w32 $(LIBDMODEM_OPTS) \
-		-DCMAKE_TOOLCHAIN_FILE=$(CURDIR)/tools/clang-retro.cmake \
-		-DCLANG_DOS=$(CLANG_DOS) -DDMODEM_WINNT=0x0400 >/dev/null
+		-DCMAKE_TOOLCHAIN_FILE=$(abspath $(DMODEM))/platforms/windows/clang-retro.cmake \
+		-DCLANG_DOS=$(CLANG_DOS) -DCLANG_RETRO_CONFIG=win32-picolibc \
+		>/dev/null
 	$(CMAKE) --build $(OUT)/w32 --target dmodem
 $(OUT)/host/dmodemd/libdmodem.a: FORCE | $(OUT)
 	$(CMAKE) -S $(DMODEM) -B $(OUT)/host $(LIBDMODEM_OPTS) >/dev/null
