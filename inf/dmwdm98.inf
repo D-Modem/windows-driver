@@ -1,0 +1,62 @@
+; SPDX-License-Identifier: AGPL-3.0-only
+; Copyright (C) 2026 D-Modem Authors
+;
+; dmwdm98.inf - D-Modem on Windows 98 SE and ME, its WDM device: dmodem.sys
+; (the same file as 2000's and XP's) with CCPORT.SYS above it, NTKERN
+; their loader.  CCPORT then makes the modem (ChildID), which
+; dmmdm98.inf installs.  Not yet tried on a real 98.
+;
+; Made by tools/make_inf.py.  Install with Add New Hardware (Control
+; Panel), "No, the device isn't in the list", "Other devices", "Have
+; Disk" (a root device, *DMD0000), dmodem.sys and both INFs in the same
+; folder.
+
+[Version]
+Signature = "$CHICAGO$"
+Class     = System
+ClassGUID = {4D36E97D-E325-11CE-BFC1-08002BE10318}
+Provider  = %Provider%
+DriverVer = 11/19/2026,0.1.0.0
+
+[DestinationDirs]
+DefaultDestDir = 10,System32\Drivers
+
+[SourceDisksNames]
+1 = %Disk%,,,
+
+[SourceDisksFiles]
+dmodem.sys = 1
+
+[Manufacturer]
+%Mfg% = DModem
+
+[DModem]
+%DeviceName% = DModem_WDM, *DMD0000
+
+[DModem_WDM]
+CopyFiles = DModem_Files
+AddReg    = DModem_WDM_Reg
+
+[DModem_Files]
+dmodem.sys
+
+; NTKERN loads the stack: dmodem.sys (the device's) and CCPORT (above it,
+; VCOMM's way in)
+[DModem_WDM_Reg]
+HKR,,DevLoader,0,*ntkern
+HKR,,NTMPDriver,,"dmodem.sys,ccport.sys"
+
+[DModem_WDM.HW]
+AddReg = DModem_WDM_HW
+
+[DModem_WDM_HW]
+HKR,,ChildID,2,"ROOT\DMD0001"
+
+[PreCopySection]
+HKR,,NoSetupUI,,1
+
+[Strings]
+Provider   = "D-Modem"
+Mfg        = "D-Modem"
+DeviceName = "D-Modem WDM device"
+Disk       = "D-Modem driver"
