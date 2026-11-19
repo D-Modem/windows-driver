@@ -69,7 +69,9 @@ inf-check:
 # ---- the engine
 
 CMAKE ?= cmake
-LIBDMODEM_OPTS = -G Ninja -DCMAKE_BUILD_TYPE=Release -DDMODEM_DMODEMD=OFF \
+# (Ninja where it is installed, else make: CI needs no package for it)
+CMAKE_GENERATOR ?= $(if $(shell command -v ninja),Ninja,Unix Makefiles)
+LIBDMODEM_OPTS = -G "$(CMAKE_GENERATOR)" -DCMAKE_BUILD_TYPE=Release -DDMODEM_DMODEMD=OFF \
 	-DDMODEM_TESTS=OFF -DDMODEM_USB=OFF -DDMODEM_ASTERISK=OFF \
 	-DDMODEM_FREESWITCH=OFF -DDMODEM_ARI=OFF
 ENGINE_SRC = engine/dmodem_svc.cpp engine/loopback.cpp common/dm_wire.c
@@ -78,15 +80,19 @@ ENGINE_FLAGS = --config=$(CLANG_DOS)/bin/win32-picolibc.cfg -D_GNU_SOURCE \
 	-O2 -Wall -Wextra -Werror -Iengine -Icommon -Iinclude \
 	-I$(DMODEM)/frontend/dmodemd
 
-# libdmodem for Windows (clang-retro) and for this machine
+# libdmodem for Windows (clang-retro: D-Modem's toolchain file with the
+# win32-picolibc config, for 95/98/ME/NT 4.0 and later; _GNU_SOURCE for
+# picolibc's CLOCK_MONOTONIC) and for this machine
 $(OUT)/w32/dmodemd/libdmodem.a: FORCE | $(OUT)
+	CFLAGS=-D_GNU_SOURCE CXXFLAGS=-D_GNU_SOURCE \
 	$(CMAKE) -S $(DMODEM) -B $(OUT)/w32 $(LIBDMODEM_OPTS) \
-		-DCMAKE_TOOLCHAIN_FILE=$(CURDIR)/tools/clang-retro.cmake \
-		-DCLANG_DOS=$(CLANG_DOS) -DDMODEM_WINNT=0x0400 >/dev/null
-	$(CMAKE) --build $(OUT)/w32 --target dmodem
+		-DCMAKE_TOOLCHAIN_FILE=$(abspath $(DMODEM))/platforms/windows/clang-retro.cmake \
+		-DCLANG_DOS=$(CLANG_DOS) -DCLANG_RETRO_CONFIG=win32-picolibc \
+		>/dev/null
+	$(CMAKE) --build $(OUT)/w32 --target dmodem --parallel
 $(OUT)/host/dmodemd/libdmodem.a: FORCE | $(OUT)
 	$(CMAKE) -S $(DMODEM) -B $(OUT)/host $(LIBDMODEM_OPTS) >/dev/null
-	$(CMAKE) --build $(OUT)/host --target dmodem
+	$(CMAKE) --build $(OUT)/host --target dmodem --parallel
 FORCE:
 
 $(OUT)/dmodem-svc.exe: $(ENGINE_SRC) $(ENGINE_H) $(OUT)/w32/dmodemd/libdmodem.a

@@ -43,9 +43,6 @@ jobs:
       - name: INFs up to date with D-Modem's
         run: make inf-check DMODEM=D-Modem
 
-      - name: Ninja
-        run: sudo apt-get install -y -q ninja-build
-
       - name: Engine's loopback line (Linux)
         run: make engine-test DMODEM=D-Modem
 
