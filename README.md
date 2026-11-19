@@ -32,7 +32,7 @@ make test                          # the shared code's tests (cc, ASan/UBSan)
 make driver CLANG_DOS=/opt/clang-dos
 make check  CLANG_DOS=/opt/clang-dos   # imports: 2000, 98 SE, ME
 make inf DMODEM=../D-Modem         # inf/*.inf from D-Modem's
-make engine DMODEM=../D-Modem      # dmodem-svc.exe (cmake, ninja), imports: 98, 2000
+make engine DMODEM=../D-Modem      # dmodem-svc.exe (cmake), imports: 98, 2000
 make engine-test DMODEM=../D-Modem # the loopback line, on this machine
 ```
 

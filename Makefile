@@ -65,7 +65,9 @@ inf-check:
 # ---- the engine
 
 CMAKE ?= cmake
-LIBDMODEM_OPTS = -G Ninja -DCMAKE_BUILD_TYPE=Release -DDMODEM_DMODEMD=OFF \
+# (Ninja where it is installed, else make: CI needs no package for it)
+CMAKE_GENERATOR ?= $(if $(shell command -v ninja),Ninja,Unix Makefiles)
+LIBDMODEM_OPTS = -G "$(CMAKE_GENERATOR)" -DCMAKE_BUILD_TYPE=Release -DDMODEM_DMODEMD=OFF \
 	-DDMODEM_TESTS=OFF -DDMODEM_USB=OFF -DDMODEM_ASTERISK=OFF \
 	-DDMODEM_FREESWITCH=OFF -DDMODEM_ARI=OFF
 ENGINE_SRC = engine/dmodem_svc.cpp engine/loopback.cpp common/dm_wire.c
@@ -83,10 +85,10 @@ $(OUT)/w32/dmodemd/libdmodem.a: FORCE | $(OUT)
 		-DCMAKE_TOOLCHAIN_FILE=$(abspath $(DMODEM))/platforms/windows/clang-retro.cmake \
 		-DCLANG_DOS=$(CLANG_DOS) -DCLANG_RETRO_CONFIG=win32-picolibc \
 		>/dev/null
-	$(CMAKE) --build $(OUT)/w32 --target dmodem
+	$(CMAKE) --build $(OUT)/w32 --target dmodem --parallel
 $(OUT)/host/dmodemd/libdmodem.a: FORCE | $(OUT)
 	$(CMAKE) -S $(DMODEM) -B $(OUT)/host $(LIBDMODEM_OPTS) >/dev/null
-	$(CMAKE) --build $(OUT)/host --target dmodem
+	$(CMAKE) --build $(OUT)/host --target dmodem --parallel
 FORCE:
 
 $(OUT)/dmodem-svc.exe: $(ENGINE_SRC) $(ENGINE_H) $(OUT)/w32/dmodemd/libdmodem.a
