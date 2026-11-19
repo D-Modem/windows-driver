@@ -10,7 +10,9 @@
  *
  *    Phase 1 of docs/design.md: the modem has no hardware yet (the
  *    engine brings its own line: SIP).  The hardware back ends come next,
- *    on the same device.
+ *    on the same device.  A USB modem's devnode is usb.c's instead: there
+ *    this driver passes the modem's transfers through to dmodemd
+ *    (dmodem_usb.h).
  *
  *    The modem's devnode (Root\DModem, the Modem class) has modem.sys
  *    as its function driver and this one as its lower filter
@@ -35,27 +37,15 @@
  *
  */
 
-#include <ntddk.h>
+#include "dm_nt.h"
 
 #include "dm_link.h"
 #include "dm_port.h"
 #include "dmodem_ioctl.h"
 
-#define DM_TAG 'mdMD'
-#define DM_VERSION "0.1.0"
-
 /* GUID_DEVINTERFACE_MODEM (ntddmodm.h) */
 static const GUID modem_interface = { 0x2c7089aa, 0x2e0e, 0x11d1,
 	{ 0xb1, 0x14, 0x00, 0xc0, 0x4f, 0xc2, 0xaa, 0xe4 } };
-
-#define KIND_PORT 1
-#define KIND_ENGINE 2
-
-/* the start of both devices' extensions */
-struct dm_dev {
-	int kind;
-	struct dm_modem *m;     /* the modem's (NULL once it has gone) */
-};
 
 /* a modem: the extension of its COM port's device */
 struct dm_modem {
@@ -819,6 +809,8 @@ static NTSTATUS NTAPI dispatch(PDEVICE_OBJECT dev, PIRP irp)
 	PIO_STACK_LOCATION sl = IoGetCurrentIrpStackLocation(irp);
 	NTSTATUS st;
 
+	if (d->kind == KIND_USB)
+		return dm_usb_dispatch(dev, irp);
 	if (!m)
 		return complete(irp, STATUS_DELETE_PENDING, 0);
 	if (d->kind == KIND_ENGINE) {
@@ -859,9 +851,13 @@ static NTSTATUS NTAPI add_device(PDRIVER_OBJECT drv, PDEVICE_OBJECT pdo)
 	struct dm_modem *m;
 	UNICODE_STRING name;
 	WCHAR buf[64];
-	ULONG index = (ULONG)InterlockedIncrement(&next_index);
+	ULONG index;
 	NTSTATUS st;
 
+	/* (a USB modem: usb.c's) */
+	if (dm_usb_wanted(pdo))
+		return dm_usb_add(drv, pdo);
+	index = (ULONG)InterlockedIncrement(&next_index);
 	ustr_init(&name, buf, sizeof(buf));
 	append_ascii(&name, "\\Device\\DModem");
 	append_number(&name, index);

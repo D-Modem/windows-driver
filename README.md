@@ -19,6 +19,8 @@ The design: [docs/design.md](docs/design.md).
 | `nt/dmodem.c` | `dmodem.sys`, a WDM driver: the lower filter under Unimodem's `modem.sys` on 2000/XP (and, through CCPORT, 98 SE/ME) |
 | `inf/dmodem.inf` | its install on 2000/XP (Add Hardware, Modems, Have Disk) |
 | `inf/dmwdm98.inf`, `inf/dmmdm98.inf` | its install on 98 SE/ME: the WDM device (dmodem.sys under CCPORT.SYS) and the modem CCPORT makes for it (on WDMMDMLD.VXD). All three INFs are made by `tools/make_inf.py` from D-Modem's INF |
+| `nt/usb.c`, `common/dm_usb.*`, `include/dmodem_usb.h` | the USB pass-through: `dmodem.sys` as the driver of a USB modem, its transfers (control, bulk, interrupt, isochronous) sent through to dmodemd on `\\.\DModemUsb<n>`, where D-Modem's `usb_win9x.cpp` has libusb's calls on them |
+| `inf/dmusb.inf` | its install, one file for 98 SE, ME, 2000 and XP: the SmartUSB56, the pico-serial sticks, the Agere, Apple and Conexant USB modems |
 | `engine/` | `dmodem-svc.exe`, the engine: D-Modem's libdmodem behind the driver's COM port. Phase 1's line is a loopback: `ATD` anything reaches an answering modem in the engine, the two run a real handshake, and it echoes what you type |
 | `tests/` | the port core's tests (from D-Modem's port_test.cpp), the channel's, and the loopback line's |
 
@@ -56,6 +58,26 @@ follows by itself.
 
 Not yet: the engine as a service (NT) or from RunServices (9x), the
 hardware back ends, and any run on a real Windows.
+
+## USB modems (98 SE, ME, 2000, XP)
+
+These versions of Windows do not have WinUSB. Thus, D-Modem's dmodemd
+cannot use libusb there. `dmodem.sys` is the driver of the USB modem in
+its place:
+
+1. Plug in the modem. When Windows asks for its driver, give it the
+   folder with `dmusb.inf` and `dmodem.sys`. If the modem has a driver
+   already, use Device Manager: the modem, Properties, Driver, Update
+   Driver, "Have Disk".
+2. Run D-Modem's `dmodemd.exe` (its `win98` build):
+   `dmodemd.exe --usb list`, then `dmodemd.exe --usb auto` with a COM
+   port or TCP as its DTE.
+
+The device of each modem is `\\.\DModemUsb<n>`. Only one process can
+use it at a time. The IOCTLs are in `include/dmodem_usb.h`, and D-Modem
+has a copy of that file. Windows 98 SE and ME have no USB 2.0. Thus, the
+Agere modem, which streams only at high speed, does not operate on them.
+Nobody has tried this on a real Windows yet.
 
 ## Licence
 

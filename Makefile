@@ -20,9 +20,9 @@ CC ?= cc
 PYTHON ?= python3
 OUT ?= build
 
-COMMON = common/dm_port.c common/dm_wire.c common/dm_link.c
+COMMON = common/dm_port.c common/dm_wire.c common/dm_link.c common/dm_usb.c
 HOST_CFLAGS = -std=c99 -O1 -g -Wall -Wextra -Werror -Wno-unused-function \
-	-Icommon -fsanitize=address,undefined -fno-sanitize-recover=all
+	-Icommon -Iinclude -fsanitize=address,undefined -fno-sanitize-recover=all
 
 DRV_CFLAGS = --config=$(CLANG_DOS)/bin/nt4-ddk.cfg -march=i586 -O2 -g -gcodeview \
 	-std=gnu99 -Wall -Wextra -Werror -Wno-unused-parameter \
@@ -40,12 +40,16 @@ $(OUT)/port_test: tests/port_test.c $(COMMON) common/*.h tests/test.h | $(OUT)
 $(OUT)/link_test: tests/link_test.c $(COMMON) common/*.h tests/test.h | $(OUT)
 	$(CC) $(HOST_CFLAGS) -o $@ tests/link_test.c $(COMMON)
 
-test: $(OUT)/port_test $(OUT)/link_test
+$(OUT)/usb_test: tests/usb_test.c $(COMMON) common/*.h include/*.h tests/test.h | $(OUT)
+	$(CC) $(HOST_CFLAGS) -o $@ tests/usb_test.c $(COMMON)
+
+test: $(OUT)/port_test $(OUT)/link_test $(OUT)/usb_test
 	ASAN_OPTIONS=detect_leaks=0 $(OUT)/port_test
 	ASAN_OPTIONS=detect_leaks=0 $(OUT)/link_test
+	ASAN_OPTIONS=detect_leaks=0 $(OUT)/usb_test
 
-$(OUT)/dmodem.sys: nt/dmodem.c $(COMMON) common/*.h include/*.h | $(OUT)
-	$(CLANG_DOS)/bin/clang $(DRV_CFLAGS) -o $@ nt/dmodem.c $(COMMON) \
+$(OUT)/dmodem.sys: nt/dmodem.c nt/usb.c nt/*.h $(COMMON) common/*.h include/*.h | $(OUT)
+	$(CLANG_DOS)/bin/clang $(DRV_CFLAGS) -o $@ nt/dmodem.c nt/usb.c $(COMMON) \
 		-Wl,--pdb=$(OUT)/dmodem.pdb -Wl,--Xlink=-pdbaltpath:%_PDB%
 
 driver: $(OUT)/dmodem.sys
