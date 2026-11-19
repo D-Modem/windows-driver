@@ -8,6 +8,11 @@
 #                 and ME's WDM
 # make inf        inf/dmodem.inf from D-Modem's INF (DMODEM: a D-Modem
 #                 checkout); make inf-check: is it up to date
+# make engine     dmodem-svc.exe, the engine (D-Modem's libdmodem, built
+#                 with clang-retro for 95/98/ME/NT 4.0 and later), its
+#                 imports checked for 98 and 2000
+# make engine-test  the engine's loopback line on this machine (libdmodem
+#                 built for it with cmake)
 
 CLANG_DOS ?= /opt/clang-dos
 DMODEM ?= ../D-Modem
@@ -23,7 +28,7 @@ DRV_CFLAGS = --config=$(CLANG_DOS)/bin/nt4-ddk.cfg -march=i586 -O2 -g -gcodeview
 	-std=gnu99 -Wall -Wextra -Werror -Wno-unused-parameter \
 	-Wno-missing-field-initializers -Icommon -Iinclude -DDM_KERNEL
 
-.PHONY: all test driver check inf inf-check clean
+.PHONY: all test driver check inf inf-check engine engine-test clean
 
 all: test
 
@@ -53,9 +58,53 @@ check: $(OUT)/dmodem.sys
 DMODEM_INF = $(DMODEM)/platforms/windows/winmodem/dmodem.inf
 
 inf:
-	$(PYTHON) tools/make_inf.py $(DMODEM_INF) inf/dmodem.inf
+	$(PYTHON) tools/make_inf.py $(DMODEM_INF) inf
 inf-check:
-	$(PYTHON) tools/make_inf.py $(DMODEM_INF) inf/dmodem.inf --check
+	$(PYTHON) tools/make_inf.py $(DMODEM_INF) inf --check
+
+# ---- the engine
+
+CMAKE ?= cmake
+LIBDMODEM_OPTS = -G Ninja -DCMAKE_BUILD_TYPE=Release -DDMODEM_DMODEMD=OFF \
+	-DDMODEM_TESTS=OFF -DDMODEM_USB=OFF -DDMODEM_ASTERISK=OFF \
+	-DDMODEM_FREESWITCH=OFF -DDMODEM_ARI=OFF
+ENGINE_SRC = engine/dmodem_svc.cpp engine/loopback.cpp common/dm_wire.c
+ENGINE_H = engine/*.h common/*.h include/*.h
+ENGINE_FLAGS = --config=$(CLANG_DOS)/bin/win32-picolibc.cfg -D_GNU_SOURCE \
+	-O2 -Wall -Wextra -Werror -Iengine -Icommon -Iinclude \
+	-I$(DMODEM)/frontend/dmodemd
+
+# libdmodem for Windows (clang-retro) and for this machine
+$(OUT)/w32/dmodemd/libdmodem.a: FORCE | $(OUT)
+	$(CMAKE) -S $(DMODEM) -B $(OUT)/w32 $(LIBDMODEM_OPTS) \
+		-DCMAKE_TOOLCHAIN_FILE=$(CURDIR)/tools/clang-retro.cmake \
+		-DCLANG_DOS=$(CLANG_DOS) -DDMODEM_WINNT=0x0400 >/dev/null
+	$(CMAKE) --build $(OUT)/w32 --target dmodem
+$(OUT)/host/dmodemd/libdmodem.a: FORCE | $(OUT)
+	$(CMAKE) -S $(DMODEM) -B $(OUT)/host $(LIBDMODEM_OPTS) >/dev/null
+	$(CMAKE) --build $(OUT)/host --target dmodem
+FORCE:
+
+$(OUT)/dmodem-svc.exe: $(ENGINE_SRC) $(ENGINE_H) $(OUT)/w32/dmodemd/libdmodem.a
+	$(CLANG_DOS)/bin/clang $(ENGINE_FLAGS) -std=gnu99 -c common/dm_wire.c \
+		-o $(OUT)/engine_wire.o
+	$(CLANG_DOS)/bin/clang++ $(ENGINE_FLAGS) -std=c++17 -o $@ \
+		engine/dmodem_svc.cpp engine/loopback.cpp $(OUT)/engine_wire.o \
+		$(OUT)/w32/dmodemd/libdmodem.a -lws2_32 -lwinmm \
+		-Wl,--strip-debug
+
+engine: $(OUT)/dmodem-svc.exe
+	$(PYTHON) $(CLANG_DOS)/share/clang-dos/check-imports.py $<
+	$(PYTHON) $(CLANG_DOS)/share/clang-dos/check-imports.py --nt 5.0 $<
+
+$(OUT)/loopback_test: tests/loopback_test.cpp engine/loopback.cpp engine/*.h \
+		$(OUT)/host/dmodemd/libdmodem.a
+	$(CXX) -std=c++17 -O1 -g -Wall -Wextra -Werror -Iengine -Itests \
+		-I$(DMODEM)/frontend/dmodemd -o $@ tests/loopback_test.cpp \
+		engine/loopback.cpp $(OUT)/host/dmodemd/libdmodem.a -lpthread -lm
+
+engine-test: $(OUT)/loopback_test
+	$(OUT)/loopback_test
 
 clean:
 	rm -rf $(OUT)

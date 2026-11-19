@@ -8,8 +8,8 @@
 ; Made by tools/make_inf.py from D-Modem's dmodem.inf (its Unimodem
 ; settings and responses): change those, not this.  Install with Add
 ; Hardware (Control Panel), "Modems", "Don't detect my modem", "Have
-; Disk": a root device, Root\DModem.  Windows 98 SE and ME will have their
-; own INF.
+; Disk": a root device, Root\DModem.  Windows 98 SE and ME have
+; dmwdm98.inf and dmmdm98.inf.
 
 [Version]
 Signature   = "$Windows NT$"

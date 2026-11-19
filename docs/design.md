@@ -1,7 +1,9 @@
 # D-Modem as a softmodem driver on legacy Windows: design
 
 Status: first draft, 14 Nov 2026; in the windows-driver repository since 19 Nov 2026,
-with phase 1's first code (the port core, the engine channel, `nt/dmodem.c`).
+with phase 1's code: the port core, the engine channel, `nt/dmodem.c`, the
+2000/XP and 98 SE/ME INFs, and `dmodem-svc.exe` (`engine/`) with the
+loopback line. None of it has run on a real Windows yet.
 
 ## Goal
 
@@ -111,6 +113,18 @@ hardware (SIP only, for tests) uses the same driver.
    transport (below).
 
 ## The engine (`dmodem-svc.exe`)
+
+Phase 1 (19 Nov 2026): `engine/dmodem_svc.cpp` links libdmodem (D-Modem's
+`dmodem` target, built with clang-retro's `win32-picolibc` config and
+`-D_GNU_SOURCE`: core, pumps and link compile unchanged; D-Modem#148 has
+the few `portable.h` changes). One thread: a WIRE_READ kept in flight
+(overlapped), the modem's DTE on a loopback socket pair, 20 ms steps paced
+by `timeGetTime`. Its line is `engine/loopback.cpp`: dial tone for 3 s
+off hook, then a ring to an answering libdmodem modem with an echo
+service. The two library modems (no analogue line) negotiate a digital
+mode (62666 bit/s) on Linux. `--selftest` runs that call without the
+driver and reports the CPU used per 20 ms step, the phase 0 measurement.
+Its imports check clean for 98 and 2000 (`check-imports.py`, `--nt 5.0`).
 
 A new small front end on libdmodem: one modem for each attached device, the
 `AnalogHook` back ends from dmodemd with their transport replaced by `HW_CTL`

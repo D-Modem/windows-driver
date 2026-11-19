@@ -17,8 +17,10 @@ The design: [docs/design.md](docs/design.md).
 | `common/dm_wire.*`, `common/dm_link.*` | the engine channel: D-Modem's wire frames (HELLO, DATA, LINES, STATE) and the driver's end of it |
 | `include/dmodem_ioctl.h` | the engine's IOCTLs on `\\.\DModemEngine<n>`, for the driver and the engine both |
 | `nt/dmodem.c` | `dmodem.sys`, a WDM driver: the lower filter under Unimodem's `modem.sys` on 2000/XP (and, through CCPORT, 98 SE/ME) |
-| `inf/dmodem.inf` | its install on 2000/XP (Add Hardware, Modems, Have Disk), made by `tools/make_inf.py` from D-Modem's INF |
-| `tests/` | the port core's tests (from D-Modem's port_test.cpp) and the channel's |
+| `inf/dmodem.inf` | its install on 2000/XP (Add Hardware, Modems, Have Disk) |
+| `inf/dmwdm98.inf`, `inf/dmmdm98.inf` | its install on 98 SE/ME: the WDM device (dmodem.sys under CCPORT.SYS) and the modem CCPORT makes for it (on WDMMDMLD.VXD). All three INFs are made by `tools/make_inf.py` from D-Modem's INF |
+| `engine/` | `dmodem-svc.exe`, the engine: D-Modem's libdmodem behind the driver's COM port. Phase 1's line is a loopback: `ATD` anything reaches an answering modem in the engine, the two run a real handshake, and it echoes what you type |
+| `tests/` | the port core's tests (from D-Modem's port_test.cpp), the channel's, and the loopback line's |
 
 ## Building
 
@@ -29,14 +31,31 @@ toolchain, not a Microsoft DDK: one `dmodem.sys` for 2000, XP, 98 SE and ME.
 make test                          # the shared code's tests (cc, ASan/UBSan)
 make driver CLANG_DOS=/opt/clang-dos
 make check  CLANG_DOS=/opt/clang-dos   # imports: 2000, 98 SE, ME
-make inf DMODEM=../D-Modem         # inf/dmodem.inf from D-Modem's
+make inf DMODEM=../D-Modem         # inf/*.inf from D-Modem's
+make engine DMODEM=../D-Modem      # dmodem-svc.exe (cmake, ninja), imports: 98, 2000
+make engine-test DMODEM=../D-Modem # the loopback line, on this machine
 ```
 
-CI does all of these (`.github/workflows/ci.yml`) with clang-retro's
-`setup-toolchain` action and uploads the driver and INF.
+The engine needs a D-Modem checkout (`DMODEM`) with D-Modem/D-Modem#148
+(libdmodem on 98 to XP). CI does all of these (`.github/workflows/ci.yml`)
+with clang-retro's `setup-toolchain` action and uploads the driver, the
+engine and the INFs.
 
-Not yet: the engine side (`dmodemd --driver` speaking the IOCTLs), the 98 SE
-INF, the hardware back ends, and any run on a real Windows.
+## Trying it (not yet done on a real machine)
+
+On 2000 or XP: Add Hardware, Modems, "Don't detect my modem", Have Disk,
+`dmodem.inf` (with `dmodem.sys` beside it). Then run `dmodem-svc.exe`
+(it finds `\\.\DModemEngine0`) and dial any number from HyperTerminal on
+the new modem: CONNECT, a greeting, and an echo. `dmodem-svc --selftest`
+runs the same call inside the engine alone and says how much of the CPU
+it takes, which is worth running first on an old machine.
+
+On 98 SE or ME: Add New Hardware, "Other devices", Have Disk, with
+`dmwdm98.inf`, `dmmdm98.inf` and `dmodem.sys` in one folder; the modem
+follows by itself.
+
+Not yet: the engine as a service (NT) or from RunServices (9x), the
+hardware back ends, and any run on a real Windows.
 
 ## Licence
 
