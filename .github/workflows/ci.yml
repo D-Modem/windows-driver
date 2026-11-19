@@ -13,9 +13,8 @@ on:
   pull_request:
 
 env:
-  # D-Modem's branch the engine builds on (main once its 98 support,
-  # D-Modem/D-Modem#148, is in)
-  DMODEM_REF: claude/project-thread-ypu0re
+  # D-Modem's branch the engine builds on
+  DMODEM_REF: main
 
 jobs:
   build:
@@ -43,9 +42,6 @@ jobs:
 
       - name: INFs up to date with D-Modem's
         run: make inf-check DMODEM=D-Modem
-
-      - name: Ninja
-        run: sudo apt-get install -y -q ninja-build
 
       - name: Engine's loopback line (Linux)
         run: make engine-test DMODEM=D-Modem
