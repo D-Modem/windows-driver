@@ -1,0 +1,120 @@
+; SPDX-License-Identifier: AGPL-3.0-only
+; Copyright (C) 2026 D-Modem Authors
+;
+; dmusb.inf - dmodem.sys as the driver of the USB modems that D-Modem's
+; dmodemd drives itself (dmodemd --usb), on Windows 98 SE, ME, 2000 and
+; XP: dmodem.sys gives the modem's transfers to dmodemd through
+; \\.\DModemUsb<n> (include/dmodem_usb.h).  The modems:
+;   - Smart Link SmartUSB56 (ST7554), USB 0483:7554
+;   - pico-serial Line, 1209:0002, and pico-serial WB, 1209:0003
+;   - Agere USB 2.0 soft modem, 047E:2892 and 047E:2828 (it streams
+;     only at high speed: not on the USB of 98 SE and ME)
+;   - Apple USB Modem, 05AC:1401 and 05AC:8220
+;   - Conexant USB HSF modems (dmodemd loads their firmware)
+;
+; One file for both families of Windows: 98 SE and ME read the plain
+; sections ($CHICAGO$, NTKERN loads the WDM driver), 2000 and XP read
+; the .NT sections.  The modem is a device of the class "D-Modem USB
+; modems", not a modem of Unimodem's: dmodemd is the modem, and its
+; COM port (or TCP) is where programs dial.
+;
+; Install: plug the modem in, and when Windows asks for its driver,
+; give it the folder with this file and dmodem.sys.  For a modem that
+; has a driver already: Device Manager, its properties, Driver, Update
+; Driver, "Have Disk".  Not yet tried on a real 98 or 2000.
+
+[Version]
+Signature = "$CHICAGO$"
+Class     = DModemUsb
+ClassGUID = {637FE2EF-1BC9-4299-955C-0C1FEC5F095A}
+Provider  = %Provider%
+DriverVer = 11/19/2026,0.2.0.0
+
+; ---- the class (98 SE and ME; 2000 and XP)
+
+[ClassInstall]
+AddReg = Class_Reg
+
+[ClassInstall32]
+AddReg = Class_Reg
+
+[Class_Reg]
+HKR,,,,%ClassName%
+HKR,,Icon,,-20
+
+[DestinationDirs]
+DefaultDestDir = 10,System32\Drivers
+
+[SourceDisksNames]
+1 = %Disk%,,,
+
+[SourceDisksFiles]
+dmodem.sys = 1
+
+[Manufacturer]
+%Mfg% = DModem
+
+[DModem]
+%SmartUSB56% = DModemUsb, USB\VID_0483&PID_7554
+%PicoLine%   = DModemUsb, USB\VID_1209&PID_0002
+%PicoWb%     = DModemUsb, USB\VID_1209&PID_0003
+%AgereUsb%   = DModemUsb, USB\VID_047E&PID_2892
+%AgereUsb%   = DModemUsb, USB\VID_047E&PID_2828
+%AppleUsb%   = DModemUsb, USB\VID_05AC&PID_1401
+%AppleUsb%   = DModemUsb, USB\VID_05AC&PID_8220
+%ConexantUsb% = DModemUsb, USB\VID_0572&PID_1300
+%ConexantUsb% = DModemUsb, USB\VID_0572&PID_1301
+%ConexantUsb% = DModemUsb, USB\VID_0572&PID_1302
+%ConexantUsb% = DModemUsb, USB\VID_0572&PID_1303
+%ConexantUsb% = DModemUsb, USB\VID_08E3&PID_0111
+%ConexantUsb% = DModemUsb, USB\VID_0803&PID_1300
+%ConexantUsb% = DModemUsb, USB\VID_0803&PID_1301
+%ConexantUsb% = DModemUsb, USB\VID_145F&PID_0106
+%ConexantUsb% = DModemUsb, USB\VID_148D&PID_1671
+%ConexantUsb% = DModemUsb, USB\VID_148D&PID_1672
+
+[DModemUsb_Files]
+dmodem.sys
+
+; ---- 98 SE and ME: NTKERN loads dmodem.sys, the devnode's only driver
+
+[DModemUsb]
+CopyFiles = DModemUsb_Files
+AddReg    = DModemUsb_Reg98
+
+[DModemUsb_Reg98]
+HKR,,DevLoader,,*ntkern
+HKR,,NTMPDriver,,dmodem.sys
+HKR,,DModemUsb,0x10001,1
+
+; ---- 2000 and XP: dmodem.sys, the devnode's function driver
+
+[DModemUsb.NT]
+CopyFiles = DModemUsb_Files
+AddReg    = DModemUsb_RegNT
+
+[DModemUsb_RegNT]
+HKR,,DModemUsb,0x10001,1
+
+[DModemUsb.NT.Services]
+AddService = dmodem,0x00000002,DModem_Service
+
+[DModem_Service]
+DisplayName   = %ServiceName%
+ServiceType   = 1
+StartType     = 3
+ErrorControl  = 1
+ServiceBinary = %12%\dmodem.sys
+
+[Strings]
+Provider    = "D-Modem"
+Mfg         = "D-Modem"
+ClassName   = "D-Modem USB modems"
+Disk        = "D-Modem driver"
+ServiceName = "D-Modem modem driver"
+SmartUSB56  = "Smart Link SmartUSB56 (D-Modem)"
+PicoLine    = "pico-serial Line (D-Modem)"
+PicoWb      = "pico-serial WB (D-Modem)"
+AgereUsb    = "Agere USB 2.0 Soft Modem (D-Modem)"
+AppleUsb    = "Apple USB Modem (D-Modem)"
+ConexantUsb = "Conexant USB HSF modem (D-Modem)"

@@ -3,7 +3,8 @@
 Status: first draft, 14 Nov 2026; in the windows-driver repository since 19 Nov 2026,
 with phase 1's code: the port core, the engine channel, `nt/dmodem.c`, the
 2000/XP and 98 SE/ME INFs, and `dmodem-svc.exe` (`engine/`) with the
-loopback line. None of it has run on a real Windows yet.
+loopback line. Also the first part of the USB back end (`nt/usb.c`,
+below). None of it has run on a real Windows yet.
 
 ## Goal
 
@@ -261,6 +262,40 @@ Real time: the sample thread at `THREAD_PRIORITY_TIME_CRITICAL` in
 | 3 | **HD-audio modem codecs** (Conexant D110/D330, other 14F1 and Agere/Si3054 MFG function groups) | `HDAUDIO\FUNC_02&...` children of the HD-audio bus driver of Microsoft (XP SP2 and 2000 SP4 with KB888111; to confirm 2000) | `GUID_HDAUDIO_BUS_INTERFACE`: stream allocation, DMA, verbs | `hda_codec.cpp`, the DAA code |
 | 4 | **AC'97 on ATI, VIA, SiS, ALi, nForce** | their modem PCI functions | the DMA of each controller | the same codecs and DAAs as 2 |
 | 5 | **PCI HSF Basic2/3, HCF** | research | own DSP or controller chip | refer to `hsf/plan.md` and `hsf/phoebe-notes.md` |
+
+### The USB back end (first part, 19 Nov 2026)
+
+The first part of the USB back end is in `nt/usb.c`. It does not use
+`HW_CTL` or the engine channel. It is a separate device:
+
+- `dmusb.inf` installs `dmodem.sys` as the function driver of the USB
+  modem: on 98 SE and ME with `DevLoader=*ntkern` and
+  `NTMPDriver=dmodem.sys`, on 2000 and XP as the service `dmodem`. The
+  value `DModemUsb=1` in the driver key, or the enumerator `USB`, tells
+  `AddDevice` that the devnode is a USB modem.
+- The driver selects the first configuration, with all interfaces at
+  alternate setting 0. It makes `\Device\DModemUsb<n>` and
+  `\DosDevices\DModemUsb<n>`.
+- D-Modem's dmodemd (the `win98` build) opens `\\.\DModemUsb<n>`. Its
+  `usb_win9x.cpp` has the libusb calls of `usb_line.cpp` on the IOCTLs of
+  `include/dmodem_usb.h`. Thus, `usb_line.cpp`, `usb_cadmus2.cpp`,
+  `usb_agere.cpp`, `usb_apple.cpp` and `usb_wb.cpp` operate without
+  changes, and dmodemd is the modem (with a COM port or TCP as its DTE).
+- Each transfer is a URB in an IRP of its own. The IOCTL of dmodemd stays
+  pending until the USB stack completes the URB. The URB uses the system
+  buffer of the IOCTL (METHOD_BUFFERED), so no memory of the process is
+  locked or mapped. The CANCEL IOCTL, the cancellation of the IOCTL and
+  the timeout of the transfer cancel the IRP of the URB. A timer (20 ms)
+  tries again until the USB stack completes it.
+- The driver makes the URBs itself. It uses no USBD.SYS function, because
+  98 and 98 SE export some of them only with decorated names.
+- `common/dm_usb.c` has the checks of the transfers and the tables
+  (control requests to URB functions, USB stack status to libusb status,
+  the configuration descriptor). `tests/usb_test.c` tests them.
+
+Next: the modem under Unimodem (a COM port in `dmodem.sys`, with the
+engine as the modem), so that Dial-Up Networking uses a USB modem
+without dmodemd's own DTE.
 
 Firmware that is not redistributable (the `ROM_IMAGE` of Cadmus 2) is read from the
 copy of the vendor driver of the user, as dmodemd does now. The installer asks for
