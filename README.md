@@ -1,83 +1,39 @@
 # windows-driver
 
-D-Modem as the driver of a softmodem on legacy Windows: Windows 98 SE, ME,
-2000 and XP first, then NT 4.0 and 95. The modem shows under Modems as an
-ordinary modem, with a COM port, and Dial-Up Networking, HyperTerminal and
-every TAPI or COM-port program use it. The modem itself (data pumps,
-V.42/V.44, AT commands) is D-Modem's, running in user mode as its engine;
-the kernel driver is a thin COM port and, later, the hardware's samples.
+windows-driver makes D-Modem the driver of a softmodem on legacy Windows:
+Windows 98 SE, ME, 2000 and XP first, then NT 4.0 and 95.
 
-The design: [docs/design.md](docs/design.md).
+The modem shows under Modems as a usual modem, with a COM port. Dial-Up
+Networking, HyperTerminal and all TAPI or COM-port programs can use it. The
+modem itself (the data pumps, V.42/V.44 and the AT commands) is D-Modem. It
+runs in user mode, in the engine `dmodem-svc.exe`. The kernel driver
+`dmodem.sys` is only a COM port and, at a later time, the path for the
+samples of the hardware.
 
-## What is here (phase 1: a modem without hardware)
+- `dmodem.sys`: one WDM driver for 98 SE, ME, 2000 and XP, built with [clang-retro](https://github.com/clang-retro)
+- `dmodem-svc.exe`: the engine, with libdmodem behind the COM port of the driver
+- The INF files for each version of Windows, made from the INF of D-Modem
+- USB modems on Windows versions that have no WinUSB: `dmodem.sys` gives their transfers to `dmodemd`
 
-| Path | What |
-| --- | --- |
-| `common/dm_port.*` | the COM port: serial.sys's reads, writes, timeouts, waits and IOCTLs, in freestanding C (no locks or callbacks: each call returns a batch of completed requests) |
-| `common/dm_wire.*`, `common/dm_link.*` | the engine channel: D-Modem's wire frames (HELLO, DATA, LINES, STATE) and the driver's end of it |
-| `include/dmodem_ioctl.h` | the engine's IOCTLs on `\\.\DModemEngine<n>`, for the driver and the engine both |
-| `nt/dmodem.c` | `dmodem.sys`, a WDM driver: the lower filter under Unimodem's `modem.sys` on 2000/XP (and, through CCPORT, 98 SE/ME) |
-| `inf/dmodem.inf` | its install on 2000/XP (Add Hardware, Modems, Have Disk) |
-| `inf/dmwdm98.inf`, `inf/dmmdm98.inf` | its install on 98 SE/ME: the WDM device (dmodem.sys under CCPORT.SYS) and the modem CCPORT makes for it (on WDMMDMLD.VXD). All three INFs are made by `tools/make_inf.py` from D-Modem's INF |
-| `nt/usb.c`, `common/dm_usb.*`, `include/dmodem_usb.h` | the USB pass-through: `dmodem.sys` as the driver of a USB modem, its transfers (control, bulk, interrupt, isochronous) sent through to dmodemd on `\\.\DModemUsb<n>`, where D-Modem's `usb_win9x.cpp` has libusb's calls on them |
-| `inf/dmusb.inf` | its install, one file for 98 SE, ME, 2000 and XP: the SmartUSB56, the pico-serial sticks, the Agere, Apple and Conexant USB modems |
-| `engine/` | `dmodem-svc.exe`, the engine: D-Modem's libdmodem behind the driver's COM port. Phase 1's line is a loopback: `ATD` anything reaches an answering modem in the engine, the two run a real handshake, and it echoes what you type |
-| `tests/` | the port core's tests (from D-Modem's port_test.cpp), the channel's, and the loopback line's |
+Status: phase 1 (a modem without hardware). The line is a loopback in the
+engine. Nobody has tried the driver on a real Windows yet.
 
-## Building
-
-The driver is built with [clang-retro](https://github.com/clang-retro)'s
-toolchain, not a Microsoft DDK: one `dmodem.sys` for 2000, XP, 98 SE and ME.
+## Quick start
 
 ```sh
-make test                          # the shared code's tests (cc, ASan/UBSan)
-make driver CLANG_DOS=/opt/clang-dos
-make check  CLANG_DOS=/opt/clang-dos   # imports: 2000, 98 SE, ME
-make inf DMODEM=../D-Modem         # inf/*.inf from D-Modem's
-make engine DMODEM=../D-Modem      # dmodem-svc.exe (cmake), imports: 98, 2000
-make engine-test DMODEM=../D-Modem # the loopback line, on this machine
+make test                              # the tests of the shared code
+make driver CLANG_DOS=/opt/clang-dos   # dmodem.sys
+make engine DMODEM=../D-Modem          # dmodem-svc.exe
 ```
 
-The engine needs a D-Modem checkout (`DMODEM`) with D-Modem/D-Modem#148
-(libdmodem on 98 to XP). CI does all of these (`.github/workflows/ci.yml`)
-with clang-retro's `setup-toolchain` action and uploads the driver, the
-engine and the INFs.
+## Documentation
 
-## Trying it (not yet done on a real machine)
-
-On 2000 or XP: Add Hardware, Modems, "Don't detect my modem", Have Disk,
-`dmodem.inf` (with `dmodem.sys` beside it). Then run `dmodem-svc.exe`
-(it finds `\\.\DModemEngine0`) and dial any number from HyperTerminal on
-the new modem: CONNECT, a greeting, and an echo. `dmodem-svc --selftest`
-runs the same call inside the engine alone and says how much of the CPU
-it takes, which is worth running first on an old machine.
-
-On 98 SE or ME: Add New Hardware, "Other devices", Have Disk, with
-`dmwdm98.inf`, `dmmdm98.inf` and `dmodem.sys` in one folder; the modem
-follows by itself.
-
-Not yet: the engine as a service (NT) or from RunServices (9x), the
-hardware back ends, and any run on a real Windows.
-
-## USB modems (98 SE, ME, 2000, XP)
-
-These versions of Windows do not have WinUSB. Thus, D-Modem's dmodemd
-cannot use libusb there. `dmodem.sys` is the driver of the USB modem in
-its place:
-
-1. Plug in the modem. When Windows asks for its driver, give it the
-   folder with `dmusb.inf` and `dmodem.sys`. If the modem has a driver
-   already, use Device Manager: the modem, Properties, Driver, Update
-   Driver, "Have Disk".
-2. Run D-Modem's `dmodemd.exe` (its `win98` build):
-   `dmodemd.exe --usb list`, then `dmodemd.exe --usb auto` with a COM
-   port or TCP as its DTE.
-
-The device of each modem is `\\.\DModemUsb<n>`. Only one process can
-use it at a time. The IOCTLs are in `include/dmodem_usb.h`, and D-Modem
-has a copy of that file. Windows 98 SE and ME have no USB 2.0. Thus, the
-Agere modem, which streams only at high speed, does not operate on them.
-Nobody has tried this on a real Windows yet.
+- [Building](docs/building.md): all the `make` targets, and what CI does
+- [Installing and trying it](docs/installing.md): the loopback modem on 2000, XP, 98 SE and ME
+- [USB modems](docs/usb.md): `dmodem.sys` as the driver of a USB modem for `dmodemd`
+- [Source layout](docs/layout.md): what each file does
+- [Design](docs/design.md): the goal, the phases and the hardware
+- [Documentation style](docs/STYLE.md): the rules for ASD-STE100 Simplified Technical English
 
 ## Licence
 
